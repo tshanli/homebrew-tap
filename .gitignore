@@ -281,3 +281,5 @@ lcov*.info
 /default_gems.json
 /gems/default_gems
 # <<<<<<<<<<<<<<<< Generated from github End <<<<<<<<<<<<<<<<<
+.env.test
+.actrc

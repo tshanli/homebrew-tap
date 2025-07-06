@@ -1,0 +1,41 @@
+name: SourceGit Formula Manager
+
+on:
+  workflow_call:
+    outputs:
+      needs_update:
+        description: "Whether the formula needs update"
+        value: ${{ jobs.manage.outputs.needs_update }}
+      changes_summary:
+        description: "Summary of changes made"
+        value: ${{ jobs.manage.outputs.changes_summary }}
+      new_version:
+        description: "New version if updated"
+        value: ${{ jobs.manage.outputs.new_version }}
+
+jobs:
+  manage:
+    runs-on: ubuntu-latest
+    outputs:
+      needs_update: ${{ steps.check.outputs.needs_update }}
+      changes_summary: ${{ steps.update.outputs.changes_summary }}
+      new_version: ${{ steps.check.outputs.latest_value }}
+    steps:
+      - name: Check for updates
+        id: check
+        uses: ./.github/workflows/shared/formula-checker.yml
+        with:
+          formula_name: "sourcegit-develop"
+          check_type: "github_commit"
+          repository: "sourcegit-scm/sourcegit"
+          branch: "develop"
+          commit_pattern: "commit_hash = '[^']*'"
+
+      - name: Update formula
+        id: update
+        if: steps.check.outputs.needs_update == 'true'
+        uses: ./.github/workflows/shared/formula-updater.yml
+        with:
+          formula_name: "sourcegit-develop"
+          update_data: ${{ steps.check.outputs.update_data }}
+          update_type: "commit_and_version"

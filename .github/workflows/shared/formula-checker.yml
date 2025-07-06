@@ -1,0 +1,122 @@
+name: Generic Formula Checker
+
+on:
+  workflow_call:
+    inputs:
+      formula_name:
+        required: true
+        type: string
+        description: "Name of the formula to check"
+      check_type:
+        required: true
+        type: string
+        description: "Type of check: github_release, github_commit, or custom"
+      repository:
+        required: true
+        type: string
+        description: "Repository in format owner/repo"
+      branch:
+        required: false
+        type: string
+        description: "Branch to check (for commit type)"
+        default: "main"
+      version_pattern:
+        required: false
+        type: string
+        description: "Regex pattern to extract version from formula"
+        default: "version '[^']*'"
+      commit_pattern:
+        required: false
+        type: string
+        description: "Regex pattern to extract commit from formula"
+        default: "commit_hash = '[^']*'"
+    outputs:
+      needs_update:
+        description: "Whether the formula needs update"
+        value: ${{ jobs.check.outputs.needs_update }}
+      current_value:
+        description: "Current version/commit in formula"
+        value: ${{ jobs.check.outputs.current_value }}
+      latest_value:
+        description: "Latest version/commit available"
+        value: ${{ jobs.check.outputs.latest_value }}
+      update_data:
+        description: "JSON data needed for update"
+        value: ${{ jobs.check.outputs.update_data }}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      needs_update: ${{ steps.compare.outputs.needs_update }}
+      current_value: ${{ steps.get-current.outputs.value }}
+      latest_value: ${{ steps.get-latest.outputs.value }}
+      update_data: ${{ steps.prepare-data.outputs.data }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get current value from formula
+        id: get-current
+        run: |
+          FORMULA_FILE="Formula/${{ inputs.formula_name }}.rb"
+
+          if [ "${{ inputs.check_type }}" == "github_commit" ]; then
+            CURRENT=$(grep -o "${{ inputs.commit_pattern }}" "$FORMULA_FILE" | sed "s/commit_hash = '//; s/'//")
+          else
+            CURRENT=$(grep -o "${{ inputs.version_pattern }}" "$FORMULA_FILE" | sed "s/version '//; s/'//")
+          fi
+
+          echo "value=$CURRENT" >> $GITHUB_OUTPUT
+          echo "Current value: $CURRENT"
+
+      - name: Get latest value from remote
+        id: get-latest
+        run: |
+          if [ "${{ inputs.check_type }}" == "github_release" ]; then
+            LATEST=$(curl -s "https://api.github.com/repos/${{ inputs.repository }}/releases/latest" | jq -r '.tag_name')
+            LATEST=${LATEST#v}  # Remove 'v' prefix if present
+          elif [ "${{ inputs.check_type }}" == "github_commit" ]; then
+            LATEST=$(curl -s "https://api.github.com/repos/${{ inputs.repository }}/commits/${{ inputs.branch }}" | jq -r '.sha')
+          fi
+
+          echo "value=$LATEST" >> $GITHUB_OUTPUT
+          echo "Latest value: $LATEST"
+
+      - name: Compare values
+        id: compare
+        run: |
+          CURRENT="${{ steps.get-current.outputs.value }}"
+          LATEST="${{ steps.get-latest.outputs.value }}"
+
+          if [ "$CURRENT" != "$LATEST" ]; then
+            echo "needs_update=true" >> $GITHUB_OUTPUT
+            echo "Update needed: $CURRENT -> $LATEST"
+          else
+            echo "needs_update=false" >> $GITHUB_OUTPUT
+            echo "No update needed"
+          fi
+
+      - name: Prepare update data
+        id: prepare-data
+        if: steps.compare.outputs.needs_update == 'true'
+        run: |
+          if [ "${{ inputs.check_type }}" == "github_commit" ]; then
+            SHORT_COMMIT="${{ steps.get-latest.outputs.value }}"
+            SHORT_COMMIT=${SHORT_COMMIT:0:7}
+            COMMIT_DATE=$(curl -s "https://api.github.com/repos/${{ inputs.repository }}/commits/${{ inputs.branch }}" | jq -r '.commit.committer.date' | cut -d'T' -f1 | tr -d '-')
+            NEW_VERSION="${COMMIT_DATE}-${SHORT_COMMIT}"
+
+            DATA=$(jq -n \
+              --arg version "$NEW_VERSION" \
+              --arg commit "${{ steps.get-latest.outputs.value }}" \
+              --arg short_commit "$SHORT_COMMIT" \
+              --arg commit_date "$COMMIT_DATE" \
+              '{version: $version, commit: $commit, short_commit: $short_commit, commit_date: $commit_date}')
+          else
+            DATA=$(jq -n \
+              --arg version "${{ steps.get-latest.outputs.value }}" \
+              '{version: $version}')
+          fi
+
+          echo "data=$DATA" >> $GITHUB_OUTPUT

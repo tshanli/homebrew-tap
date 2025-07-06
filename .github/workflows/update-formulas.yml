@@ -1,0 +1,42 @@
+name: Update All Formulas
+
+on:
+  schedule:
+    # Run every day at 2 AM UTC
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+    inputs:
+      formula:
+        description: "Specific formula to update (leave empty for all)"
+        required: false
+        type: choice
+        options:
+          - "all"
+          - "sourcegit-develop"
+          - "upgit"
+        default: "all"
+
+jobs:
+  # SourceGit formula management
+  sourcegit:
+    if: github.event.inputs.formula == 'all' || github.event.inputs.formula == 'sourcegit-develop' || github.event.inputs.formula == ''
+    uses: ./.github/workflows/shared/sourcegit-manager.yml
+
+  # Upgit formula management
+  upgit:
+    if: github.event.inputs.formula == 'all' || github.event.inputs.formula == 'upgit' || github.event.inputs.formula == ''
+    uses: ./.github/workflows/shared/upgit-manager.yml
+
+  # Collect results and create PR
+  create-pull-request:
+    needs: [sourcegit, upgit]
+    if: always() && (needs.sourcegit.outputs.needs_update == 'true' || needs.upgit.outputs.needs_update == 'true')
+    uses: ./.github/workflows/shared/pr-manager.yml
+    with:
+      updates: |
+        [
+          ${{ needs.sourcegit.outputs.needs_update == 'true' && format('{"formula": "sourcegit-develop", "version": "{0}", "changes_summary": "{1}", "repository": "sourcegit-scm/sourcegit"}', needs.sourcegit.outputs.new_version, needs.sourcegit.outputs.changes_summary) || '' }}
+          ${{ needs.sourcegit.outputs.needs_update == 'true' && needs.upgit.outputs.needs_update == 'true' && ',' || '' }}
+          ${{ needs.upgit.outputs.needs_update == 'true' && format('{"formula": "upgit", "version": "{0}", "changes_summary": "{1}", "repository": "pluveto/upgit"}', needs.upgit.outputs.new_version, needs.upgit.outputs.changes_summary) || '' }}
+        ]
+      pr_title_prefix: "Auto-update formulas"

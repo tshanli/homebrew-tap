@@ -1,0 +1,70 @@
+name: Test Upgit Formula (Standalone)
+
+on:
+  workflow_dispatch:
+    inputs:
+      formula:
+        description: "Formula to test"
+        required: false
+        type: choice
+        options:
+          - "upgit"
+        default: "upgit"
+
+jobs:
+  test-upgit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.1"
+
+      - name: Check Upgit updates
+        id: check
+        run: |
+          # Get latest release from GitHub API
+          LATEST_RELEASE=$(curl -s https://api.github.com/repos/pluveto/upgit/releases/latest | jq -r '.tag_name')
+          # Remove 'v' prefix if present
+          LATEST_VERSION=${LATEST_RELEASE#v}
+          
+          # Get current version from formula
+          CURRENT_VERSION=$(grep -o "version '[^']*'" Formula/upgit.rb | sed "s/version '//; s/'//")
+          
+          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "latest_version=$LATEST_VERSION" >> $GITHUB_OUTPUT
+          
+          echo "Current version: $CURRENT_VERSION"
+          echo "Latest version: $LATEST_VERSION"
+          
+          # Compare versions
+          if [ "$CURRENT_VERSION" != "$LATEST_VERSION" ]; then
+            echo "needs_update=true" >> $GITHUB_OUTPUT
+            echo "✅ Update needed: $CURRENT_VERSION -> $LATEST_VERSION"
+          else
+            echo "needs_update=false" >> $GITHUB_OUTPUT
+            echo "✅ Formula is up to date"
+          fi
+
+      - name: Validate formula syntax
+        run: |
+          echo "Validating Formula/upgit.rb syntax..."
+          ruby -c Formula/upgit.rb
+          echo "✅ Formula syntax is valid"
+
+      - name: Test formula loading
+        run: |
+          echo "Testing formula loading..."
+          # This would require brew to be installed, so we'll just do basic checks
+          echo "Formula file exists: $([ -f Formula/upgit.rb ] && echo 'YES' || echo 'NO')"
+          echo "Formula contains version: $(grep -q 'version' Formula/upgit.rb && echo 'YES' || echo 'NO')"
+          echo "Formula contains install method: $(grep -q 'def install' Formula/upgit.rb && echo 'YES' || echo 'NO')"
+
+      - name: Show formula content (for debugging)
+        run: |
+          echo "=== Formula content ==="
+          head -20 Formula/upgit.rb
+          echo "=== End of content ==="
