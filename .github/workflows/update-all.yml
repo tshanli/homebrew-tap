@@ -71,6 +71,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Casks:**" >> $GITHUB_STEP_SUMMARY
           echo "- \`brew install --cask your-tap/aiaw\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`brew install --cask your-tap/kazumi\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Formulas:**" >> $GITHUB_STEP_SUMMARY
           echo "- \`brew install --build-from-source your-tap/sourcegit-develop\`" >> $GITHUB_STEP_SUMMARY

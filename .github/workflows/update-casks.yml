@@ -10,6 +10,7 @@ on:
         options:
           - "all"
           - "aiaw"
+          - "kazumi"
         default: "all"
   workflow_call:
 
@@ -19,9 +20,14 @@ jobs:
     if: github.event.inputs.cask == 'all' || github.event.inputs.cask == 'aiaw' || github.event.inputs.cask == ''
     uses: ./.github/workflows/update-aiaw.yml
 
+  # Run Kazumi update
+  update-kazumi:
+    if: github.event.inputs.cask == 'all' || github.event.inputs.cask == 'kazumi' || github.event.inputs.cask == ''
+    uses: ./.github/workflows/update-kazumi.yml
+
   # Create summary
   create-summary:
-    needs: [update-aiaw]
+    needs: [update-aiaw, update-kazumi]
     if: always() && github.event_name != 'workflow_call'
     runs-on: ubuntu-latest
     steps:
@@ -35,6 +41,9 @@ jobs:
           # Count successful updates
           updated_count=0
           if [ "${{ needs.update-aiaw.outputs.needs_update }}" == "true" ]; then
+            updated_count=$((updated_count + 1))
+          fi
+          if [ "${{ needs.update-kazumi.outputs.needs_update }}" == "true" ]; then
             updated_count=$((updated_count + 1))
           fi
           

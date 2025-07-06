@@ -1,0 +1,129 @@
+name: Update Kazumi Cask
+
+on:
+  workflow_dispatch: # Allow manual trigger
+  workflow_call: # Allow reuse by other workflows
+    outputs:
+      needs_update:
+        description: "Whether the cask needed an update"
+        value: ${{ jobs.update-kazumi.outputs.needs_update }}
+      new_version:
+        description: "The new version that was updated to"
+        value: ${{ jobs.update-kazumi.outputs.new_version }}
+      current_version:
+        description: "The current version before update"
+        value: ${{ jobs.update-kazumi.outputs.current_version }}
+      changes_made:
+        description: "Description of changes made"
+        value: ${{ jobs.update-kazumi.outputs.changes_made }}
+
+jobs:
+  update-kazumi:
+    runs-on: ubuntu-latest
+    outputs:
+      needs_update: ${{ steps.check-update.outputs.needs_update }}
+      new_version: ${{ steps.check-update.outputs.new_version }}
+      current_version: ${{ steps.check-update.outputs.current_version }}
+      changes_made: ${{ steps.update-cask.outputs.changes_made }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.1"
+
+      - name: Check Kazumi updates
+        id: check-update
+        run: |
+          # Get latest release from GitHub API
+          LATEST_RELEASE=$(curl -s https://api.github.com/repos/Predidit/Kazumi/releases/latest | jq -r '.tag_name')
+          # Remove 'v' prefix if present
+          LATEST_VERSION=${LATEST_RELEASE#v}
+
+          # Get current version from cask
+          CURRENT_VERSION=$(grep -o 'version "[^"]*"' Casks/kazumi.rb | sed 's/version "//; s/"//')
+
+          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "new_version=$LATEST_VERSION" >> $GITHUB_OUTPUT
+          echo "Current version: $CURRENT_VERSION"
+          echo "Latest version: $LATEST_VERSION"
+
+          # Compare versions
+          if [ "$CURRENT_VERSION" != "$LATEST_VERSION" ]; then
+            echo "needs_update=true" >> $GITHUB_OUTPUT
+            echo "Kazumi needs update from $CURRENT_VERSION to $LATEST_VERSION"
+          else
+            echo "needs_update=false" >> $GITHUB_OUTPUT
+            echo "Kazumi is up to date"
+          fi
+
+      - name: Update Kazumi cask
+        id: update-cask
+        if: steps.check-update.outputs.needs_update == 'true'
+        run: |
+          NEW_VERSION="${{ steps.check-update.outputs.new_version }}"
+
+          # Download and calculate new checksum
+          cd /tmp
+
+          # Download DMG file
+          curl -L -o kazumi_macos.dmg "https://github.com/Predidit/Kazumi/releases/download/${NEW_VERSION}/Kazumi_macos_${NEW_VERSION}.dmg"
+
+          NEW_SHA=$(shasum -a 256 kazumi_macos.dmg | cut -d' ' -f1)
+
+          cd $GITHUB_WORKSPACE
+
+          # Update version
+          sed -i "s/version \"[^\"]*\"/version \"$NEW_VERSION\"/" Casks/kazumi.rb
+
+          # Update SHA256
+          sed -i "s/sha256 \"[^\"]*\"/sha256 \"$NEW_SHA\"/" Casks/kazumi.rb
+
+          echo "changes_made=Updated Kazumi from ${{ steps.check-update.outputs.current_version }} to $NEW_VERSION with new checksum" >> $GITHUB_OUTPUT
+          echo "Updated Kazumi to version: $NEW_VERSION"
+          echo "SHA256: $NEW_SHA"
+
+      - name: Validate updated cask
+        if: steps.check-update.outputs.needs_update == 'true'
+        run: |
+          # Validate Ruby syntax
+          ruby -c Casks/kazumi.rb
+          echo "✅ Cask syntax is valid"
+
+      - name: Commit and push changes
+        if: steps.check-update.outputs.needs_update == 'true'
+        run: |
+          # Check if there are actually changes to commit
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "No changes to commit, skipping..."
+            exit 0
+          fi
+          
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add Casks/kazumi.rb
+          git commit -m "Update Kazumi to version ${{ steps.check-update.outputs.new_version }}"
+          git push
+
+      - name: Generate package summary
+        if: always()
+        run: |
+          echo "### 📱 Kazumi" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.check-update.outputs.needs_update }}" == "true" ]; then
+            echo "✅ **Updated successfully**" >> $GITHUB_STEP_SUMMARY
+            echo "- ${{ steps.update-cask.outputs.changes_made }}" >> $GITHUB_STEP_SUMMARY
+            echo "- Updated from \`${{ steps.check-update.outputs.current_version }}\` to \`${{ steps.check-update.outputs.new_version }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Test command:**" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+            echo "brew install --cask your-tap/kazumi" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⏸️ **No update needed**" >> $GITHUB_STEP_SUMMARY
+            echo "- Current version \`${{ steps.check-update.outputs.current_version }}\` is already the latest" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
