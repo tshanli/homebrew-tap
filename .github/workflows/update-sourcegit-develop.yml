@@ -1,9 +1,6 @@
 name: Update SourceGit Develop Formula
 
 on:
-  schedule:
-    # Run every day at 2 AM UTC
-    - cron: "0 2 * * *"
   workflow_dispatch: # Allow manual trigger
   workflow_call: # Allow reuse by other workflows
     outputs:

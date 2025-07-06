@@ -1,9 +1,6 @@
 name: Update All Formulas
 
 on:
-  schedule:
-    # Run every day at 3 AM UTC (after individual workflows)
-    - cron: "0 3 * * *"
   workflow_dispatch:
     inputs:
       formula:

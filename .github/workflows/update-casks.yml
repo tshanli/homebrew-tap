@@ -1,9 +1,6 @@
 name: Update All Casks
 
 on:
-  schedule:
-    # Run every day at 2 AM UTC (before formulas)
-    - cron: "0 2 * * *"
   workflow_dispatch:
     inputs:
       cask:
