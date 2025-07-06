@@ -2,12 +2,12 @@ name: Update All Formulas
 
 on:
   schedule:
-    # Run every day at 2 AM UTC
-    - cron: "0 2 * * *"
+    # Run every day at 3 AM UTC (after individual workflows)
+    - cron: "0 3 * * *"
   workflow_dispatch:
     inputs:
       formula:
-        description: "Specific formula to update (leave empty for all)"
+        description: "Specific formula to update"
         required: false
         type: choice
         options:
@@ -17,26 +17,57 @@ on:
         default: "all"
 
 jobs:
-  # SourceGit formula management
-  sourcegit:
+  # Run SourceGit update
+  update-sourcegit:
     if: github.event.inputs.formula == 'all' || github.event.inputs.formula == 'sourcegit-develop' || github.event.inputs.formula == ''
-    uses: ./.github/workflows/shared/sourcegit-manager.yml
+    uses: ./.github/workflows/update-sourcegit-develop.yml
 
-  # Upgit formula management
-  upgit:
+  # Run Upgit update
+  update-upgit:
     if: github.event.inputs.formula == 'all' || github.event.inputs.formula == 'upgit' || github.event.inputs.formula == ''
-    uses: ./.github/workflows/shared/upgit-manager.yml
+    uses: ./.github/workflows/update-upgit.yml
 
-  # Collect results and create PR
-  create-pull-request:
-    needs: [sourcegit, upgit]
-    if: always() && (needs.sourcegit.outputs.needs_update == 'true' || needs.upgit.outputs.needs_update == 'true')
-    uses: ./.github/workflows/shared/pr-manager.yml
-    with:
-      updates: |
-        [
-          ${{ needs.sourcegit.outputs.needs_update == 'true' && format('{"formula": "sourcegit-develop", "version": "{0}", "changes_summary": "{1}", "repository": "sourcegit-scm/sourcegit"}', needs.sourcegit.outputs.new_version, needs.sourcegit.outputs.changes_summary) || '' }}
-          ${{ needs.sourcegit.outputs.needs_update == 'true' && needs.upgit.outputs.needs_update == 'true' && ',' || '' }}
-          ${{ needs.upgit.outputs.needs_update == 'true' && format('{"formula": "upgit", "version": "{0}", "changes_summary": "{1}", "repository": "pluveto/upgit"}', needs.upgit.outputs.new_version, needs.upgit.outputs.changes_summary) || '' }}
-        ]
-      pr_title_prefix: "Auto-update formulas"
+  # Create summary
+  create-summary:
+    needs: [update-sourcegit, update-upgit]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create update summary
+        run: |
+          echo "## 📋 Formula Update Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ needs.update-sourcegit.outputs.needs_update }}" == "true" ]; then
+            echo "### ✅ SourceGit Develop" >> $GITHUB_STEP_SUMMARY
+            echo "- ${{ needs.update-sourcegit.outputs.changes_made }}" >> $GITHUB_STEP_SUMMARY
+            echo "- New version: \`${{ needs.update-sourcegit.outputs.new_version }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ⏸️ SourceGit Develop" >> $GITHUB_STEP_SUMMARY
+            echo "- No update needed" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ needs.update-upgit.outputs.needs_update }}" == "true" ]; then
+            echo "### ✅ Upgit" >> $GITHUB_STEP_SUMMARY
+            echo "- ${{ needs.update-upgit.outputs.changes_made }}" >> $GITHUB_STEP_SUMMARY
+            echo "- Updated from \`${{ needs.update-upgit.outputs.current_version }}\` to \`${{ needs.update-upgit.outputs.new_version }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ⏸️ Upgit" >> $GITHUB_STEP_SUMMARY
+            echo "- No update needed" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "### 🎯 Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "All formula updates have been automatically committed and pushed." >> $GITHUB_STEP_SUMMARY
+          echo "Test the updated formulas:" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ needs.update-sourcegit.outputs.needs_update }}" == "true" ]; then
+            echo "brew install --build-from-source your-tap/sourcegit-develop" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ "${{ needs.update-upgit.outputs.needs_update }}" == "true" ]; then
+            echo "brew install --build-from-source your-tap/upgit" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY

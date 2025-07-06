@@ -1,0 +1,124 @@
+name: Update Upgit Formula
+
+on:
+  schedule:
+    # Run every day at 2 AM UTC
+    - cron: "0 2 * * *"
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  update-upgit:
+    runs-on: ubuntu-latest
+    outputs:
+      needs_update: ${{ steps.check-update.outputs.needs_update }}
+      new_version: ${{ steps.check-update.outputs.new_version }}
+      current_version: ${{ steps.check-update.outputs.current_version }}
+      changes_made: ${{ steps.update-formula.outputs.changes_made }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.1"
+
+      - name: Check Upgit updates
+        id: check-update
+        run: |
+          # Get latest release from GitHub API
+          LATEST_RELEASE=$(curl -s https://api.github.com/repos/pluveto/upgit/releases/latest | jq -r '.tag_name')
+          # Remove 'v' prefix if present
+          LATEST_VERSION=${LATEST_RELEASE#v}
+
+          # Get current version from formula
+          CURRENT_VERSION=$(grep -o "version '[^']*'" Formula/upgit.rb | sed "s/version '//; s/'//")
+
+          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "new_version=$LATEST_VERSION" >> $GITHUB_OUTPUT
+          echo "Current version: $CURRENT_VERSION"
+          echo "Latest version: $LATEST_VERSION"
+
+          # Compare versions
+          if [ "$CURRENT_VERSION" != "$LATEST_VERSION" ]; then
+            echo "needs_update=true" >> $GITHUB_OUTPUT
+            echo "Upgit needs update from $CURRENT_VERSION to $LATEST_VERSION"
+          else
+            echo "needs_update=false" >> $GITHUB_OUTPUT
+            echo "Upgit is up to date"
+          fi
+
+      - name: Update Upgit formula
+        id: update-formula
+        if: steps.check-update.outputs.needs_update == 'true'
+        run: |
+          NEW_VERSION="${{ steps.check-update.outputs.new_version }}"
+
+          # Download and calculate new checksums
+          cd /tmp
+
+          # Download all platform binaries and calculate checksums
+          curl -L -o upgit_macos_arm64 "https://github.com/pluveto/upgit/releases/download/v${NEW_VERSION}/upgit_macos_arm64"
+          curl -L -o upgit_macos_amd64 "https://github.com/pluveto/upgit/releases/download/v${NEW_VERSION}/upgit_macos_amd64"
+          curl -L -o upgit_linux_arm64 "https://github.com/pluveto/upgit/releases/download/v${NEW_VERSION}/upgit_linux_arm64"
+          curl -L -o upgit_linux_amd64 "https://github.com/pluveto/upgit/releases/download/v${NEW_VERSION}/upgit_linux_amd64"
+
+          MACOS_ARM64_SHA=$(shasum -a 256 upgit_macos_arm64 | cut -d' ' -f1)
+          MACOS_AMD64_SHA=$(shasum -a 256 upgit_macos_amd64 | cut -d' ' -f1)
+          LINUX_ARM64_SHA=$(shasum -a 256 upgit_linux_arm64 | cut -d' ' -f1)
+          LINUX_AMD64_SHA=$(shasum -a 256 upgit_linux_amd64 | cut -d' ' -f1)
+
+          cd $GITHUB_WORKSPACE
+
+          # Update version
+          sed -i "s/version '[^']*'/version \"$NEW_VERSION\"/" Formula/upgit.rb
+
+          # Update checksums
+          # macOS ARM64
+          sed -i "/if OS\.mac?/,/elsif OS\.linux?/ {
+            /if Hardware::CPU\.arm?/,/else/ {
+              /sha256/ s/sha256 \"[^\"]*\"/sha256 \"$MACOS_ARM64_SHA\"/
+            }
+          }" Formula/upgit.rb
+
+          # macOS AMD64
+          sed -i "/if OS\.mac?/,/elsif OS\.linux?/ {
+            /else/,/elsif OS\.linux?/ {
+              /sha256/ s/sha256 \"[^\"]*\"/sha256 \"$MACOS_AMD64_SHA\"/
+            }
+          }" Formula/upgit.rb
+
+          # Linux ARM64
+          sed -i "/elsif OS\.linux?/,/^  end/ {
+            /if Hardware::CPU\.arm?/,/else/ {
+              /sha256/ s/sha256 \"[^\"]*\"/sha256 \"$LINUX_ARM64_SHA\"/
+            }
+          }" Formula/upgit.rb
+
+          # Linux AMD64
+          sed -i "/elsif OS\.linux?/,/^  end/ {
+            /else/,/^  end/ {
+              /sha256/ s/sha256 \"[^\"]*\"/sha256 \"$LINUX_AMD64_SHA\"/
+            }
+          }" Formula/upgit.rb
+
+          echo "changes_made=Updated Upgit from ${{ steps.check-update.outputs.current_version }} to $NEW_VERSION with new checksums" >> $GITHUB_OUTPUT
+          echo "Updated Upgit to version: $NEW_VERSION"
+
+      - name: Validate updated formula
+        if: steps.check-update.outputs.needs_update == 'true'
+        run: |
+          # Validate Ruby syntax
+          ruby -c Formula/upgit.rb
+          echo "✅ Formula syntax is valid"
+
+      - name: Commit and push changes
+        if: steps.check-update.outputs.needs_update == 'true'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add Formula/upgit.rb
+          git commit -m "Update Upgit to version ${{ steps.check-update.outputs.new_version }}"
+          git push
