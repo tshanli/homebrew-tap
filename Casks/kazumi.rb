@@ -14,6 +14,10 @@ cask "kazumi" do
 
   app "Kazumi.app"
 
+  caveat <<~EOS
+    #{token} may need to be allowed in System Settings → Privacy & Security.
+  EOS
+
   zap trash: [
     "~/Library/Application Support/Kazumi",
     "~/Library/Caches/Kazumi",
