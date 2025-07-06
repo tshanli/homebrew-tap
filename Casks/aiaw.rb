@@ -16,16 +16,6 @@ cask "aiaw" do
 
   app "AI as Workspace.app"
 
-  caveat do
-    <<~EOS
-      If you see "AI as Workspace is damaged and can't be opened" when launching the app,
-      try reinstalling with the --no-quarantine flag:
-
-        brew reinstall --cask --no-quarantine aiaw
-
-    EOS
-  end
-
   zap trash: [
     "~/Library/Application Support/AI as Workspace",
     "~/Library/Caches/AI as Workspace",

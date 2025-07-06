@@ -40,13 +40,13 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Detailed package summaries are shown in the individual workflow jobs above." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           # Function to generate workflow status summary
           generate_workflow_status() {
             local workflow_type="$1"
             local workflow_result="$2"
             local icon="$3"
-            
+
             echo "### $icon $workflow_type Workflow" >> $GITHUB_STEP_SUMMARY
             case "$workflow_result" in
               "success")
@@ -65,14 +65,3 @@ jobs:
           # Generate status for each workflow type
           generate_workflow_status "Casks" "${{ needs.update-casks.result }}" "📱"
           generate_workflow_status "Formulas" "${{ needs.update-formulas.result }}" "🍺"
-          
-          echo "### 📋 Quick Reference" >> $GITHUB_STEP_SUMMARY
-          echo "All packages in this tap:" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Casks:**" >> $GITHUB_STEP_SUMMARY
-          echo "- \`brew install --cask your-tap/aiaw\`" >> $GITHUB_STEP_SUMMARY
-          echo "- \`brew install --cask your-tap/kazumi\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Formulas:**" >> $GITHUB_STEP_SUMMARY
-          echo "- \`brew install --build-from-source your-tap/sourcegit-develop\`" >> $GITHUB_STEP_SUMMARY
-          echo "- \`brew install --build-from-source your-tap/upgit\`" >> $GITHUB_STEP_SUMMARY
