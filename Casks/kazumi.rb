@@ -14,9 +14,18 @@ cask "kazumi" do
 
   app "Kazumi.app"
 
-  caveat <<~EOS
-    #{token} may need to be allowed in System Settings → Privacy & Security.
-  EOS
+  caveats do
+    <<~EOS
+      Kazumi may need to be allowed in System Settings → Privacy & Security.
+
+      If you see "Kazumi is damaged and can't be opened" when launching the app,
+      try reinstalling with the --no-quarantine flag:
+
+        brew reinstall --cask --no-quarantine kazumi
+
+      This bypasses macOS Gatekeeper quarantine for unsigned applications.
+    EOS
+  end
 
   zap trash: [
     "~/Library/Application Support/Kazumi",
