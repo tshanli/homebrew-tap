@@ -48,7 +48,7 @@ jobs:
           LATEST_VERSION=${LATEST_RELEASE#v}
 
           # Get current version from formula
-          CURRENT_VERSION=$(grep -o "version '[^']*'" Formula/upgit.rb | sed "s/version '//; s/'//")
+          CURRENT_VERSION=$(grep -o 'version "[^"]*"' Formula/upgit.rb | sed 's/version "//; s/"//')
 
           echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
           echo "new_version=$LATEST_VERSION" >> $GITHUB_OUTPUT
@@ -87,7 +87,7 @@ jobs:
           cd $GITHUB_WORKSPACE
 
           # Update version
-          sed -i "s/version '[^']*'/version \"$NEW_VERSION\"/" Formula/upgit.rb
+          sed -i "s/version \"[^\"]*\"/version \"$NEW_VERSION\"/" Formula/upgit.rb
 
           # Update checksums
           # macOS ARM64
@@ -131,6 +131,12 @@ jobs:
       - name: Commit and push changes
         if: steps.check-update.outputs.needs_update == 'true'
         run: |
+          # Check if there are actually changes to commit
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "No changes to commit, skipping..."
+            exit 0
+          fi
+          
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add Formula/upgit.rb
