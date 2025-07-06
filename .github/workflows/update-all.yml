@@ -1,0 +1,77 @@
+name: Update All (Formulas and Casks)
+
+on:
+  schedule:
+    # Run every day at 1 AM UTC (before individual workflows)
+    - cron: "0 1 * * *"
+  workflow_dispatch:
+    inputs:
+      update_type:
+        description: "What to update"
+        required: false
+        type: choice
+        options:
+          - "all"
+          - "formulas-only"
+          - "casks-only"
+        default: "all"
+
+jobs:
+  # Run cask updates first
+  update-casks:
+    if: github.event.inputs.update_type == 'all' || github.event.inputs.update_type == 'casks-only' || github.event.inputs.update_type == ''
+    uses: ./.github/workflows/update-casks.yml
+
+  # Run formula updates after casks
+  update-formulas:
+    if: github.event.inputs.update_type == 'all' || github.event.inputs.update_type == 'formulas-only' || github.event.inputs.update_type == ''
+    needs: update-casks
+    uses: ./.github/workflows/update-formulas.yml
+
+  # Create combined summary
+  create-summary:
+    needs: [update-casks, update-formulas]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create combined update summary
+        run: |
+          echo "## 🚀 Complete Update Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Detailed package summaries are shown in the individual workflow jobs above." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Function to generate workflow status summary
+          generate_workflow_status() {
+            local workflow_type="$1"
+            local workflow_result="$2"
+            local icon="$3"
+            
+            echo "### $icon $workflow_type Workflow" >> $GITHUB_STEP_SUMMARY
+            case "$workflow_result" in
+              "success")
+                echo "✅ Completed successfully" >> $GITHUB_STEP_SUMMARY
+                ;;
+              "skipped")
+                echo "⏭️ Skipped (no packages selected)" >> $GITHUB_STEP_SUMMARY
+                ;;
+              *)
+                echo "❌ Failed or was cancelled" >> $GITHUB_STEP_SUMMARY
+                ;;
+            esac
+            echo "" >> $GITHUB_STEP_SUMMARY
+          }
+
+          # Generate status for each workflow type
+          generate_workflow_status "Casks" "${{ needs.update-casks.result }}" "📱"
+          generate_workflow_status "Formulas" "${{ needs.update-formulas.result }}" "🍺"
+          
+          echo "### 📋 Quick Reference" >> $GITHUB_STEP_SUMMARY
+          echo "All packages in this tap:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Casks:**" >> $GITHUB_STEP_SUMMARY
+          echo "- \`brew install --cask your-tap/aiaw\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Formulas:**" >> $GITHUB_STEP_SUMMARY
+          echo "- \`brew install --build-from-source your-tap/sourcegit-develop\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`brew install --build-from-source your-tap/upgit\`" >> $GITHUB_STEP_SUMMARY

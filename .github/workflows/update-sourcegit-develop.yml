@@ -101,3 +101,22 @@ jobs:
           git add Formula/sourcegit-develop.rb
           git commit -m "Update SourceGit develop to commit ${{ steps.get-commit.outputs.short_commit }}"
           git push
+
+      - name: Generate package summary
+        if: always()
+        run: |
+          echo "### 🍺 SourceGit Develop" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.check-update.outputs.needs_update }}" == "true" ]; then
+            echo "✅ **Updated successfully**" >> $GITHUB_STEP_SUMMARY
+            echo "- ${{ steps.update-formula.outputs.changes_made }}" >> $GITHUB_STEP_SUMMARY
+            echo "- New version: \`${{ steps.check-update.outputs.new_version }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Test command:**" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+            echo "brew install --build-from-source your-tap/sourcegit-develop" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⏸️ **No update needed**" >> $GITHUB_STEP_SUMMARY
+            echo "- Current version is already the latest" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY

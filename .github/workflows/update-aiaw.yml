@@ -1,0 +1,138 @@
+name: Update AIaW Cask
+
+on:
+  schedule:
+    # Run every day at 2:30 AM UTC
+    - cron: "30 2 * * *"
+  workflow_dispatch: # Allow manual trigger
+  workflow_call: # Allow reuse by other workflows
+    outputs:
+      needs_update:
+        description: "Whether the cask needed an update"
+        value: ${{ jobs.update-aiaw.outputs.needs_update }}
+      new_version:
+        description: "The new version that was updated to"
+        value: ${{ jobs.update-aiaw.outputs.new_version }}
+      current_version:
+        description: "The current version before update"
+        value: ${{ jobs.update-aiaw.outputs.current_version }}
+      changes_made:
+        description: "Description of changes made"
+        value: ${{ jobs.update-aiaw.outputs.changes_made }}
+
+jobs:
+  update-aiaw:
+    runs-on: ubuntu-latest
+    outputs:
+      needs_update: ${{ steps.check-update.outputs.needs_update }}
+      new_version: ${{ steps.check-update.outputs.new_version }}
+      current_version: ${{ steps.check-update.outputs.current_version }}
+      changes_made: ${{ steps.update-cask.outputs.changes_made }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.1"
+
+      - name: Check AIaW updates
+        id: check-update
+        run: |
+          # Get latest release from GitHub API
+          LATEST_RELEASE=$(curl -s https://api.github.com/repos/NitroRCr/AIaW/releases/latest | jq -r '.tag_name')
+          # Remove 'v' prefix if present
+          LATEST_VERSION=${LATEST_RELEASE#v}
+
+          # Get current version from cask
+          CURRENT_VERSION=$(grep -o 'version "[^"]*"' Casks/aiaw.rb | sed 's/version "//; s/"//')
+
+          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "new_version=$LATEST_VERSION" >> $GITHUB_OUTPUT
+          echo "Current version: $CURRENT_VERSION"
+          echo "Latest version: $LATEST_VERSION"
+
+          # Compare versions
+          if [ "$CURRENT_VERSION" != "$LATEST_VERSION" ]; then
+            echo "needs_update=true" >> $GITHUB_OUTPUT
+            echo "AIaW needs update from $CURRENT_VERSION to $LATEST_VERSION"
+          else
+            echo "needs_update=false" >> $GITHUB_OUTPUT
+            echo "AIaW is up to date"
+          fi
+
+      - name: Update AIaW cask
+        id: update-cask
+        if: steps.check-update.outputs.needs_update == 'true'
+        run: |
+          NEW_VERSION="${{ steps.check-update.outputs.new_version }}"
+
+          # Download and calculate new checksums for both architectures
+          cd /tmp
+
+          # Download DMG files for both architectures
+          curl -L -o aiaw_aarch64.dmg "https://github.com/NitroRCr/AIaW/releases/download/v${NEW_VERSION}/AI.as.Workspace_${NEW_VERSION}_aarch64.dmg"
+          curl -L -o aiaw_x64.dmg "https://github.com/NitroRCr/AIaW/releases/download/v${NEW_VERSION}/AI.as.Workspace_${NEW_VERSION}_x64.dmg"
+
+          ARM_SHA=$(shasum -a 256 aiaw_aarch64.dmg | cut -d' ' -f1)
+          INTEL_SHA=$(shasum -a 256 aiaw_x64.dmg | cut -d' ' -f1)
+
+          cd $GITHUB_WORKSPACE
+
+          # Update version
+          sed -i "s/version \"[^\"]*\"/version \"$NEW_VERSION\"/" Casks/aiaw.rb
+
+          # Update ARM SHA256
+          sed -i "s/sha256 arm:   \"[^\"]*\"/sha256 arm:   \"$ARM_SHA\"/" Casks/aiaw.rb
+
+          # Update Intel SHA256
+          sed -i "s/intel: \"[^\"]*\"/intel: \"$INTEL_SHA\"/" Casks/aiaw.rb
+
+          echo "changes_made=Updated AIaW from ${{ steps.check-update.outputs.current_version }} to $NEW_VERSION with new checksums" >> $GITHUB_OUTPUT
+          echo "Updated AIaW to version: $NEW_VERSION"
+          echo "ARM SHA256: $ARM_SHA"
+          echo "Intel SHA256: $INTEL_SHA"
+
+      - name: Validate updated cask
+        if: steps.check-update.outputs.needs_update == 'true'
+        run: |
+          # Validate Ruby syntax
+          ruby -c Casks/aiaw.rb
+          echo "✅ Cask syntax is valid"
+
+      - name: Commit and push changes
+        if: steps.check-update.outputs.needs_update == 'true'
+        run: |
+          # Check if there are actually changes to commit
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "No changes to commit, skipping..."
+            exit 0
+          fi
+          
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add Casks/aiaw.rb
+          git commit -m "Update AIaW to version ${{ steps.check-update.outputs.new_version }}"
+          git push
+
+      - name: Generate package summary
+        if: always()
+        run: |
+          echo "### 📱 AIaW" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.check-update.outputs.needs_update }}" == "true" ]; then
+            echo "✅ **Updated successfully**" >> $GITHUB_STEP_SUMMARY
+            echo "- ${{ steps.update-cask.outputs.changes_made }}" >> $GITHUB_STEP_SUMMARY
+            echo "- Updated from \`${{ steps.check-update.outputs.current_version }}\` to \`${{ steps.check-update.outputs.new_version }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Test command:**" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+            echo "brew install --cask your-tap/aiaw" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⏸️ **No update needed**" >> $GITHUB_STEP_SUMMARY
+            echo "- Current version \`${{ steps.check-update.outputs.current_version }}\` is already the latest" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY

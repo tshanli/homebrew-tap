@@ -15,6 +15,7 @@ on:
           - "sourcegit-develop"
           - "upgit"
         default: "all"
+  workflow_call:
 
 jobs:
   # Run SourceGit update
@@ -30,44 +31,31 @@ jobs:
   # Create summary
   create-summary:
     needs: [update-sourcegit, update-upgit]
-    if: always()
+    if: always() && github.event_name != 'workflow_call'
     runs-on: ubuntu-latest
     steps:
-      - name: Create update summary
+      - name: Create aggregated formula summary
         run: |
-          echo "## 📋 Formula Update Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## 🍺 Formula Update Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-
+          echo "Individual formula summaries are shown above in their respective jobs." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Count successful updates
+          updated_count=0
           if [ "${{ needs.update-sourcegit.outputs.needs_update }}" == "true" ]; then
-            echo "### ✅ SourceGit Develop" >> $GITHUB_STEP_SUMMARY
-            echo "- ${{ needs.update-sourcegit.outputs.changes_made }}" >> $GITHUB_STEP_SUMMARY
-            echo "- New version: \`${{ needs.update-sourcegit.outputs.new_version }}\`" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "### ⏸️ SourceGit Develop" >> $GITHUB_STEP_SUMMARY
-            echo "- No update needed" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-          fi
-
-          if [ "${{ needs.update-upgit.outputs.needs_update }}" == "true" ]; then
-            echo "### ✅ Upgit" >> $GITHUB_STEP_SUMMARY
-            echo "- ${{ needs.update-upgit.outputs.changes_made }}" >> $GITHUB_STEP_SUMMARY
-            echo "- Updated from \`${{ needs.update-upgit.outputs.current_version }}\` to \`${{ needs.update-upgit.outputs.new_version }}\`" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "### ⏸️ Upgit" >> $GITHUB_STEP_SUMMARY
-            echo "- No update needed" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-          fi
-
-          echo "### 🎯 Next Steps" >> $GITHUB_STEP_SUMMARY
-          echo "All formula updates have been automatically committed and pushed." >> $GITHUB_STEP_SUMMARY
-          echo "Test the updated formulas:" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ needs.update-sourcegit.outputs.needs_update }}" == "true" ]; then
-            echo "brew install --build-from-source your-tap/sourcegit-develop" >> $GITHUB_STEP_SUMMARY
+            updated_count=$((updated_count + 1))
           fi
           if [ "${{ needs.update-upgit.outputs.needs_update }}" == "true" ]; then
-            echo "brew install --build-from-source your-tap/upgit" >> $GITHUB_STEP_SUMMARY
+            updated_count=$((updated_count + 1))
           fi
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          
+          if [ $updated_count -gt 0 ]; then
+            echo "### 🎉 Summary" >> $GITHUB_STEP_SUMMARY
+            echo "- **$updated_count** formula(s) were updated" >> $GITHUB_STEP_SUMMARY
+            echo "- All updates have been automatically committed and pushed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ℹ️ Summary" >> $GITHUB_STEP_SUMMARY
+            echo "- No formulas needed updates" >> $GITHUB_STEP_SUMMARY
+            echo "- All formulas are already up to date" >> $GITHUB_STEP_SUMMARY
+          fi
