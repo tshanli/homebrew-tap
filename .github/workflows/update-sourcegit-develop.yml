@@ -14,6 +14,11 @@ on:
         description: "Description of changes made"
         value: ${{ jobs.update-sourcegit-develop.outputs.changes_made }}
 
+# Grant necessary permissions for the workflow
+permissions:
+  contents: write # Required to push commits
+  actions: read # Required to read workflow artifacts
+
 jobs:
   update-sourcegit-develop:
     runs-on: ubuntu-latest
@@ -26,6 +31,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          # Ensure we can push commits
+          persist-credentials: true
 
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
@@ -35,8 +42,12 @@ jobs:
       - name: Get latest commit from SourceGit develop branch
         id: get-commit
         run: |
-          # Get the latest commit hash from the develop branch
-          LATEST_COMMIT=$(curl -s https://api.github.com/repos/sourcegit-scm/sourcegit/commits/develop | jq -r '.sha')
+          # Get the latest commit hash from the develop branch with error handling
+          LATEST_COMMIT=$(curl -s --fail https://api.github.com/repos/sourcegit-scm/sourcegit/commits/develop | jq -r '.sha')
+          if [ "$LATEST_COMMIT" = "null" ] || [ -z "$LATEST_COMMIT" ]; then
+            echo "Failed to fetch latest commit information"
+            exit 1
+          fi
           echo "latest_commit=$LATEST_COMMIT" >> $GITHUB_OUTPUT
           echo "Latest commit: $LATEST_COMMIT"
 
@@ -45,8 +56,12 @@ jobs:
           echo "short_commit=$SHORT_COMMIT" >> $GITHUB_OUTPUT
           echo "Short commit: $SHORT_COMMIT"
 
-          # Get commit date for version
-          COMMIT_DATE=$(curl -s https://api.github.com/repos/sourcegit-scm/sourcegit/commits/develop | jq -r '.commit.committer.date' | cut -d'T' -f1 | tr -d '-')
+          # Get commit date for version with error handling
+          COMMIT_DATE=$(curl -s --fail https://api.github.com/repos/sourcegit-scm/sourcegit/commits/develop | jq -r '.commit.committer.date' | cut -d'T' -f1 | tr -d '-')
+          if [ -z "$COMMIT_DATE" ]; then
+            echo "Failed to extract commit date"
+            exit 1
+          fi
           echo "commit_date=$COMMIT_DATE" >> $GITHUB_OUTPUT
           echo "Commit date: $COMMIT_DATE"
 
@@ -55,6 +70,10 @@ jobs:
         run: |
           # Get current commit hash from formula
           CURRENT_COMMIT=$(grep -o "commit_hash = '[^']*'" Formula/sourcegit-develop.rb | sed "s/commit_hash = '//; s/'//")
+          if [ -z "$CURRENT_COMMIT" ]; then
+            echo "Failed to extract current commit from formula"
+            exit 1
+          fi
           echo "Current commit in formula: $CURRENT_COMMIT"
           echo "current_commit=$CURRENT_COMMIT" >> $GITHUB_OUTPUT
 
@@ -110,7 +129,7 @@ jobs:
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "**Test command:**" >> $GITHUB_STEP_SUMMARY
             echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-            echo "brew install --build-from-source your-tap/sourcegit-develop" >> $GITHUB_STEP_SUMMARY
+            echo "brew install --build-from-source ${{ github.repository_owner }}/homebrew-tap/sourcegit-develop" >> $GITHUB_STEP_SUMMARY
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           else
             echo "⏸️ **No update needed**" >> $GITHUB_STEP_SUMMARY

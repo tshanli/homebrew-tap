@@ -16,6 +16,11 @@ on:
           - "casks-only"
         default: "all"
 
+# Grant necessary permissions for the workflow
+permissions:
+  contents: write # Required to push commits
+  actions: read # Required to read workflow artifacts
+
 jobs:
   # Run cask updates first
   update-casks:

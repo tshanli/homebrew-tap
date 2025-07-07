@@ -14,6 +14,11 @@ on:
         default: "all"
   workflow_call:
 
+# Grant necessary permissions for the workflow
+permissions:
+  contents: write # Required to push commits
+  actions: read # Required to read workflow artifacts
+
 jobs:
   # Run AIaW update
   update-aiaw:
@@ -33,11 +38,11 @@ jobs:
     steps:
       - name: Create aggregated cask summary
         run: |
-          echo "## � Cask Update Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## 🍺 Cask Update Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Individual cask summaries are shown above in their respective jobs." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           # Count successful updates
           updated_count=0
           if [ "${{ needs.update-aiaw.outputs.needs_update }}" == "true" ]; then
@@ -46,9 +51,9 @@ jobs:
           if [ "${{ needs.update-kazumi.outputs.needs_update }}" == "true" ]; then
             updated_count=$((updated_count + 1))
           fi
-          
+
           if [ $updated_count -gt 0 ]; then
-            echo "### � Summary" >> $GITHUB_STEP_SUMMARY
+            echo "### ✅ Summary" >> $GITHUB_STEP_SUMMARY
             echo "- **$updated_count** cask(s) were updated" >> $GITHUB_STEP_SUMMARY
             echo "- All updates have been automatically committed and pushed" >> $GITHUB_STEP_SUMMARY
           else

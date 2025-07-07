@@ -17,6 +17,11 @@ on:
         description: "Description of changes made"
         value: ${{ jobs.update-aiaw.outputs.changes_made }}
 
+# Grant necessary permissions for the workflow
+permissions:
+  contents: write # Required to push commits
+  actions: read # Required to read workflow artifacts
+
 jobs:
   update-aiaw:
     runs-on: ubuntu-latest
@@ -30,6 +35,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          # Ensure we can push commits
+          persist-credentials: true
 
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
@@ -39,13 +46,22 @@ jobs:
       - name: Check AIaW updates
         id: check-update
         run: |
-          # Get latest release from GitHub API
-          LATEST_RELEASE=$(curl -s https://api.github.com/repos/NitroRCr/AIaW/releases/latest | jq -r '.tag_name')
+          # Get latest release from GitHub API with error handling
+          LATEST_RELEASE=$(curl -s --fail https://api.github.com/repos/NitroRCr/AIaW/releases/latest | jq -r '.tag_name')
+          if [ "$LATEST_RELEASE" = "null" ] || [ -z "$LATEST_RELEASE" ]; then
+            echo "Failed to fetch latest release information"
+            exit 1
+          fi
+
           # Remove 'v' prefix if present
           LATEST_VERSION=${LATEST_RELEASE#v}
 
           # Get current version from cask
           CURRENT_VERSION=$(grep -o 'version "[^"]*"' Casks/aiaw.rb | sed 's/version "//; s/"//')
+          if [ -z "$CURRENT_VERSION" ]; then
+            echo "Failed to extract current version from cask"
+            exit 1
+          fi
 
           echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
           echo "new_version=$LATEST_VERSION" >> $GITHUB_OUTPUT
@@ -108,7 +124,7 @@ jobs:
             echo "No changes to commit, skipping..."
             exit 0
           fi
-          
+
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add Casks/aiaw.rb
@@ -126,7 +142,7 @@ jobs:
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "**Test command:**" >> $GITHUB_STEP_SUMMARY
             echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-            echo "brew install --cask your-tap/aiaw" >> $GITHUB_STEP_SUMMARY
+            echo "brew install --cask ${{ github.repository_owner }}/homebrew-tap/aiaw" >> $GITHUB_STEP_SUMMARY
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           else
             echo "⏸️ **No update needed**" >> $GITHUB_STEP_SUMMARY
