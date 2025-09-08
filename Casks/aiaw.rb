@@ -1,7 +1,7 @@
 cask "aiaw" do
-  version "1.8.0"
-  sha256 arm:   "00aa6a985eeec3274297e791dacb6c5e02ba2484bc0afe5e94161bc3d5e3c0da",
-         intel: "521f251f57df7a00f390e899c065f58f3810b14381c63aadf122e53f852ac4c4"
+  version "1.8.1"
+  sha256 arm:   "cbc5ee147dcbf225d67893502cba1f4ee25d8e009cebc568db1fa384f11ec48d",
+         intel: "94f71c573f3fb536573e7855fd31bde950f8de6e39568099b16d06a733f6615e"
 
   url "https://github.com/NitroRCr/AIaW/releases/download/v#{version}/AI.as.Workspace_#{version}_#{Hardware::CPU.intel? ? "x64" : "aarch64"}.dmg"
   name "AI as Workspace"
