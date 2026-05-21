@@ -1,6 +1,6 @@
 cask "kazumi" do
-  version "2.1.1"
-  sha256 "6afbbfcdfa0e469a146a10f3cd6ca89baec5a0ce0a51052835e3b390395f3c08"
+  version "2.1.2"
+  sha256 "2be6a41ef0cf84999e8699fcaeeaef5d5ef755c82fe8c37a0cadc7dbf23c3296"
 
   url "https://github.com/Predidit/Kazumi/releases/download/#{version}/Kazumi_macos_#{version}.dmg"
   name "Kazumi"
