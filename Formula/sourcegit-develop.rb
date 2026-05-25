@@ -2,14 +2,14 @@ class SourcegitDevelop < Formula
   desc 'Open-source Git GUI client (develop branch build)'
   homepage 'https://github.com/sourcegit-scm/sourcegit'
   url 'https://github.com/sourcegit-scm/sourcegit/archive/refs/heads/develop.zip'
-  version '20260522-d061a50'
+  version '20260525-6b72889'
 
   depends_on 'dotnet'
   depends_on 'openssl@3'
 
   def install
     # Use static version string for Homebrew build - updated by GitHub Action
-    commit_hash = 'd061a50'
+    commit_hash = '6b72889'
 
     # Build and publish
     system 'dotnet', 'build', '-c', 'Release'
