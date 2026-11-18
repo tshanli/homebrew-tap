@@ -349,6 +349,38 @@ def test-update-all-reports-a-package-whose-commit-or-push-fails [] {
   assert equal (sh-git $t.remote log --format=%s main | lines) ["seed"]
 }
 
+def test-publish-refuses-to-push-a-checkout-that-is-not-on-the-target-branch [] {
+  let t = (tap-with-remote)
+  sh-git $t.clone checkout --quiet -b feature
+  "# a\n" | save --append ($t.clone | path join "Casks" "kazumi.rb")
+  let r = (try { publish { file: "Casks/kazumi.rb", commit_message: "Update Kazumi to version 9.9.9" } --root $t.clone; "no error" } catch {|e| $e.msg })
+  assert str contains $r "main"
+  assert equal (sh-git $t.remote log --format=%s main | lines) ["seed"]
+}
+
+def test-update-package-rejects-a-release-version-that-is-not-a-plain-version [] {
+  for bad in ['1.0${1}' '' ' ' "1.0\n2" 'a"b' '#{version}'] {
+    let root = (tap-root "cask" "kazumi")
+    let file = ($root | path join "Casks" "kazumi.rb")
+    let before = (open --raw $file)
+    let r = (update-package $kazumi { version: $bad } --root $root --fetch-hash {|url| a-hash "b" })
+    assert equal $r.status "failed" $"version ($bad | to nuon) should be rejected"
+    assert str contains $r.message "version"
+    assert equal (open --raw $file) $before
+  }
+}
+
+def test-update-package-rejects-a-branch-commit-or-date-that-is-malformed [] {
+  for bad in [{ commit: "", date: "2026-11-10" } { commit: "zzzzzzzz", date: "2026-11-10" } { commit: "4f18ef1aaaa", date: "" } { commit: "4f18ef1aaaa", date: "yesterday" }] {
+    let root = (tap-root "formula" "sourcegit-develop")
+    let file = ($root | path join "Formula" "sourcegit-develop.rb")
+    let before = (open --raw $file)
+    let r = (update-package $sourcegit $bad --root $root)
+    assert equal $r.status "failed" $"($bad | to nuon) should be rejected"
+    assert equal (open --raw $file) $before
+  }
+}
+
 def test-render-release-keeps-single-quoted-version [] {
   let text = $"version '1.0'\nsha256 \"(a-hash "0")\"\n"
   let out = (render-release $text "2.0" [(a-hash "f")])

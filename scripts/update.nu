@@ -101,6 +101,7 @@ export def update-package [
       "release" => {
         let from = (find-in $original $version_line)
         let to = $latest.version
+        require-match $to '^[0-9A-Za-z][0-9A-Za-z._+-]*$' "version"
         if $from == $to {
           { status: "current", from: $from, to: $to }
         } else {
@@ -117,6 +118,8 @@ export def update-package [
       "branch" => {
         let from = (find-in $original $version_line)
         let current_commit = (find-in $original $commit_line)
+        require-match $latest.commit '^[0-9a-f]{7,40}$' "commit"
+        require-match $latest.date '^\d{4}-\d{2}-\d{2}$' "date"
         if ($latest.commit | str starts-with $current_commit) {
           { status: "current", from: $from, to: $from }
         } else {
@@ -154,6 +157,11 @@ export def publish [
   --remote: string = "origin"
   --branch: string = "main"
 ] {
+  # A manual dispatch can run from any branch; never push its commits to `branch`.
+  let current = (^git -C $root rev-parse --abbrev-ref HEAD | str trim)
+  if $current != $branch {
+    error make { msg: $"refusing to publish from branch ($current): updates are only pushed from ($branch)" }
+  }
   git-in $root add $result.file
   git-in $root commit --quiet --message $result.commit_message
 
@@ -283,6 +291,13 @@ def --wrapped git-in [root: string, ...args: string] {
   let r = (^git -C $root ...$args | complete)
   if $r.exit_code != 0 { error make { msg: $"git ($args | str join ' ') failed: ($r.stderr | str trim)" } }
   null
+}
+
+# Upstream values end up inside Ruby source and URLs: accept only the expected shape.
+def require-match [value: string, pattern: string, what: string] {
+  if not ($value =~ $pattern) {
+    error make { msg: $"upstream ($what) is not in the expected form: ($value | to nuon)" }
+  }
 }
 
 # The quoted value on the first line of `text` matching `pattern` (whose group 3 is the value).

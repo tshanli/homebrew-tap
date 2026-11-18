@@ -6,6 +6,9 @@
 #   nu test-workflows.nu --unit   run only the unit tests (no Docker, no act)
 
 def main [--unit] {
+  # Work from the repo root whatever the caller's directory is.
+  cd ($env.CURRENT_FILE | path dirname)
+
   print "🧪 Unit tests (scripts/tests)"
   nu scripts/test.nu
 
