@@ -3,6 +3,8 @@
 # Updates this tap's Packages from their Upstreams. See GLOSSARY.md.
 
 # Group 3 is the quoted value; replacing with `${1}${2}new${2}` swaps it.
+const publish_remote = "origin"
+const publish_branch = "main"
 const version_line = '^(\s*version\s+)(["\x27])([^"\x27]*)["\x27]'
 const commit_line = '^(\s*commit_hash\s*=\s*)(["\x27])([^"\x27]*)["\x27]'
 const sha_line = '^\s*sha256\s+"[0-9a-f]{64}"'
@@ -159,19 +161,17 @@ export def update-package [
   $result | merge ($plan | reject text)
 }
 
-# Commits an updated Package's file as its own commit and pushes it to `branch`,
+# Commits an updated Package's file as its own commit and pushes it to `main`,
 # rebasing onto whatever landed there meanwhile and retrying a few times.
 export def publish [
   result: record # an `update-package` result with status "updated"
   --root: path = "."
-  --remote: string = "origin"
-  --branch: string = "main"
   --retry-delay: duration = 2sec # attempt N waits N times this before trying again
 ] {
-  # A manual dispatch can run from any branch; never push its commits to `branch`.
+  # A manual dispatch can run from any branch; never push its commits to `main`.
   let current = (^git -C $root rev-parse --abbrev-ref HEAD | str trim)
-  if $current != $branch {
-    error make { msg: $"refusing to publish from branch ($current): updates are only pushed from ($branch)" }
+  if $current != $publish_branch {
+    error make { msg: $"refusing to publish from branch ($current): updates are only pushed from ($publish_branch)" }
   }
   # A Package that fails to publish must leave nothing behind: a staged file or local
   # commit would ride along with the next Package's commit or push.
@@ -179,7 +179,7 @@ export def publish [
   try {
     git-in $root add $result.file
     git-in $root commit --quiet --message $result.commit_message
-    push-with-retries $root $remote $branch $retry_delay $result.file
+    push-with-retries $root $publish_remote $publish_branch $retry_delay $result.file
   } catch {|e|
     ^git -C $root rebase --abort | complete | ignore
     # Drop our commit and unstage, then restore only this Package's file: edits to
@@ -285,14 +285,13 @@ export def update-all [
 # Updates the tap's Packages. Exits 1 if any Package failed, after trying all of them.
 def main [
   --only: string # update just this Package
-  --manifest: path = "scripts/packages.toml"
   --no-publish # edit files but do not commit or push
 ] {
   if (not $no_publish) {
     ^git config --local user.email "action@github.com"
     ^git config --local user.name "GitHub Action"
   }
-  let results = (update-all (load-manifest $manifest) --only $only --no-publish=$no_publish)
+  let results = (update-all (load-manifest "scripts/packages.toml") --only $only --no-publish=$no_publish)
 
   let lines = ($results | each {|r|
     match $r.status {
