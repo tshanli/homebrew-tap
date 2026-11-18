@@ -82,18 +82,47 @@ def test-download-sha256-fails-on-an-empty-download [] {
   assert str contains $r "download failed"
 }
 
+# Starts `python3 -I -u <args>` in the background on a port the OS picked; the program
+# must print "port <n>" once it listens. Returns its pid and port.
+def --wrapped start-python [...args: string]: nothing -> record<pid: int, port: int> {
+  let log = (mktemp --tmpdir)
+  let quoted = ($args | each {|a| $"'($a)'" } | str join " ")
+  let pid = (^sh -c $"python3 -I -u ($quoted) > '($log)' 2>&1 & echo $!" | str trim | into int)
+  mut port = -1
+  for _ in 1..50 {
+    let found = (open --raw $log | parse --regex 'port (?<p>\d+)')
+    if ($found | is-not-empty) { $port = ($found | first | get p | into int); break }
+    sleep 100ms
+  }
+  if $port == -1 {
+    ^kill $pid
+    error make { msg: "python helper did not start listening" }
+  }
+  { pid: $pid, port: $port }
+}
+
 # The failure policy rests on this: an HTTP 404 must fail, not hash the error page.
 def test-download-sha256-fails-on-an-http-404 [] {
   let dir = (mktemp --directory)
   "present\n" | save ($dir | path join "present.txt")
-  let port = (random int 20000..40000)
-  let pid = (^sh -c $"python3 -I -m http.server ($port) --bind 127.0.0.1 --directory ($dir) >/dev/null 2>&1 & echo $!" | str trim)
-  sleep 1sec
-  let found = (try { download-sha256 $"http://127.0.0.1:($port)/present.txt" } catch {|e| $"error: ($e.msg)" })
-  let missing = (try { download-sha256 $"http://127.0.0.1:($port)/missing.zip"; "no error" } catch {|e| $e.msg })
-  ^kill $pid
+  let server = (start-python -m http.server 0 --bind 127.0.0.1 --directory $dir)
+  let found = (try { download-sha256 $"http://127.0.0.1:($server.port)/present.txt" } catch {|e| $"error: ($e.msg)" })
+  let missing = (try { download-sha256 $"http://127.0.0.1:($server.port)/missing.zip"; "no error" } catch {|e| $e.msg })
+  ^kill $server.pid
   assert equal $found "14bca160a84ec9e8e5b25cb86ec8b0945f870b8781c8e94ef883b58d27b508db"
   assert str contains $missing "download failed"
+}
+
+# A connection that is accepted and then never answered must not hang the run.
+def test-download-sha256-gives-up-on-a-stalled-server [] {
+  let code = 'import socket,time; s=socket.socket(); s.bind(("127.0.0.1",0)); s.listen(); print("port",s.getsockname()[1],flush=True); c=s.accept(); time.sleep(60)'
+  let server = (start-python -c $code)
+  let started = (date now)
+  let r = (try { download-sha256 $"http://127.0.0.1:($server.port)/x.zip" --max-time 1sec; "no error" } catch {|e| $e.msg })
+  let took = ((date now) - $started)
+  ^kill $server.pid | complete | ignore
+  assert str contains $r "download failed"
+  assert ($took < 20sec) $"took ($took)"
 }
 
 # A throwaway tap root holding one Package's file; returns the root.
@@ -246,6 +275,45 @@ def test-update-all-reports-a-package_whose_upstream_lookup_fails [] {
   let results = (update-all [$kazumi] --root $t.clone --latest $latest)
   assert equal ($results | get status) ["failed"]
   assert str contains ($results | first | get message) "api down"
+}
+
+def test-update-all-leaves-a-package-whose-commit-is-rejected-out-of-the-next-commit [] {
+  let t = (tap-with-remote)
+  let hook = ($t.clone | path join ".git" "hooks" "commit-msg")
+  "#!/bin/sh\ngrep -q Kazumi \"$1\" && exit 1\nexit 0\n" | save $hook
+  chmod +x $hook
+  let latest = {|pkg| { version: "9.9.9" } }
+  let results = (update-all [$kazumi $upgit] --root $t.clone --latest $latest --fetch-hash {|url| a-hash "e" })
+  assert equal ($results | get status) ["failed" "updated"]
+  assert equal (sh-git $t.remote log --format=%s main | lines) ["Update Upgit to version 9.9.9" "seed"]
+  # the Upgit commit holds the Upgit file only (one file line + the summary line)
+  assert equal (sh-git $t.remote show --stat --format= main | lines | length) 2
+  assert equal (sh-git $t.clone status --porcelain) ""
+  assert str contains (open --raw ($t.clone | path join "Casks" "kazumi.rb")) 'version "2.4.4"'
+}
+
+def test-publish-undoes-its_commit-when-every-push-attempt-fails [] {
+  let t = (tap-with-remote)
+  let before = (sh-git $t.clone rev-parse HEAD)
+  let hook = ($t.remote | path join "hooks" "pre-receive")
+  "#!/bin/sh\nexit 1\n" | save $hook
+  chmod +x $hook
+  "# a\n" | save --append ($t.clone | path join "Casks" "kazumi.rb")
+  let started = (date now)
+  let r = (try { publish { file: "Casks/kazumi.rb", commit_message: "Update Kazumi to version 9.9.9" } --root $t.clone --retry-delay 0sec; "no error" } catch {|e| $e.msg })
+  assert str contains $r "after 3 attempts"
+  assert (((date now) - $started) < 4sec) "the retry delay was not honoured"
+  assert equal (sh-git $t.clone rev-parse HEAD) $before
+  assert equal (sh-git $t.clone status --porcelain) ""
+  assert (not ((open --raw ($t.clone | path join "Casks" "kazumi.rb")) | str contains "# a"))
+}
+
+def test-update-all-no-publish-edits-the-file-and-commits-nothing [] {
+  let t = (tap-with-remote)
+  let results = (update-all [$kazumi] --no-publish --root $t.clone --latest {|pkg| { version: "9.9.9" } } --fetch-hash {|url| a-hash "e" })
+  assert equal ($results | get status) ["updated"]
+  assert str contains (sh-git $t.clone status --porcelain) "Casks/kazumi.rb"
+  assert equal (sh-git $t.remote log --format=%s main | lines) ["seed"]
 }
 
 def test-update-all-only-touches-the-named-package [] {

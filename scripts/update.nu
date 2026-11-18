@@ -67,10 +67,11 @@ export def version-from-tag [tag: string]: nothing -> string {
 }
 
 # SHA-256 of what `url` serves. Fails on any HTTP error or empty download.
-export def download-sha256 [url: string]: nothing -> string {
+export def download-sha256 [url: string, --max-time: duration = 10min]: nothing -> string {
   let dir = (mktemp --directory)
   let file = ($dir | path join "download")
-  let r = (^curl --fail --location --silent --show-error --retry 3 --output $file $url | complete)
+  let seconds = ($max_time / 1sec | math ceil | into string)
+  let r = (^curl --fail --location --silent --show-error --retry 3 --connect-timeout 20 --max-time $seconds --output $file $url | complete)
   let size = (if ($file | path exists) { ls $file | get 0.size } else { 0b })
   if $r.exit_code != 0 or $size == 0b {
     rm --recursive --force $dir
@@ -156,15 +157,28 @@ export def publish [
   --root: path = "."
   --remote: string = "origin"
   --branch: string = "main"
+  --retry-delay: duration = 2sec # attempt N waits N times this before trying again
 ] {
   # A manual dispatch can run from any branch; never push its commits to `branch`.
   let current = (^git -C $root rev-parse --abbrev-ref HEAD | str trim)
   if $current != $branch {
     error make { msg: $"refusing to publish from branch ($current): updates are only pushed from ($branch)" }
   }
-  git-in $root add $result.file
-  git-in $root commit --quiet --message $result.commit_message
+  # A Package that fails to publish must leave nothing behind: a staged file or local
+  # commit would ride along with the next Package's commit or push.
+  let start = (^git -C $root rev-parse HEAD | str trim)
+  try {
+    git-in $root add $result.file
+    git-in $root commit --quiet --message $result.commit_message
+    push-with-retries $root $remote $branch $retry_delay $result.file
+  } catch {|e|
+    ^git -C $root rebase --abort | complete | ignore
+    ^git -C $root reset --hard --quiet $start | complete | ignore
+    error make { msg: $e.msg }
+  }
+}
 
+def push-with-retries [root: string, remote: string, branch: string, delay: duration, file: string] {
   mut last_error = ""
   for attempt in 1..3 {
     let pulled = (^git -C $root pull --quiet --rebase $remote $branch | complete)
@@ -176,9 +190,9 @@ export def publish [
       $last_error = $pulled.stderr
       ^git -C $root rebase --abort | complete | ignore
     }
-    sleep ($attempt * 2sec)
+    sleep ($attempt * $delay)
   }
-  error make { msg: $"could not publish ($result.file) after 3 attempts: ($last_error | str trim)" }
+  error make { msg: $"could not publish ($file) after 3 attempts: ($last_error | str trim)" }
 }
 
 # The Packages the tap publishes, each with its Upstream and Tracking mode.
@@ -213,11 +227,11 @@ export def fetch-latest [pkg: record]: nothing -> record {
   let api = $"https://api.github.com/repos/($pkg.upstream)"
   match $pkg.tracking {
     "release" => {
-      let tag = (http get --headers $headers $"($api)/releases/latest" | get tag_name)
+      let tag = (http get --max-time 60sec --headers $headers $"($api)/releases/latest" | get tag_name)
       { version: (version-from-tag $tag) }
     }
     "branch" => {
-      let c = (http get --headers $headers $"($api)/commits/($pkg.branch)")
+      let c = (http get --max-time 60sec --headers $headers $"($api)/commits/($pkg.branch)")
       { commit: $c.sha, date: ($c.commit.committer.date | str substring 0..<10) }
     }
   }
