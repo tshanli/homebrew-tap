@@ -82,6 +82,11 @@ export def download-sha256 [url: string, --max-time: duration = 10min]: nothing 
   $sha
 }
 
+# Where a Package's file lives in the tap, relative to its root.
+export def package-file [pkg: record]: nothing -> string {
+  $"(if $pkg.kind == "cask" { "Casks" } else { "Formula" })/($pkg.name).rb"
+}
+
 # Updates one Package's file in place from `latest`, the Upstream's newest state:
 # `{version}` for a release-tracked Package, `{commit, date}` for a branch-tracked one.
 # Never leaves the file half-updated: on any failure it is byte-identical to before.
@@ -91,7 +96,7 @@ export def update-package [
   --root: path = "."
   --fetch-hash: closure # url -> sha256; defaults to download-sha256. Tests replace it.
 ]: nothing -> record {
-  let rel = $"(if $pkg.kind == "cask" { "Casks" } else { "Formula" })/($pkg.name).rb"
+  let rel = (package-file $pkg)
   let path = ($root | path join $rel)
   let original = (open --raw $path)
   let result = { name: $pkg.name, file: $rel, status: "current", from: "", to: "", message: "", commit_message: "" }

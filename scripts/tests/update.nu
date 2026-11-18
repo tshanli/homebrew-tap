@@ -154,7 +154,7 @@ def test-update-package-release-rewrites-version-and-hashes [] {
   assert equal (open --raw ($seen | path join "urls")) "https://github.com/Predidit/Kazumi/releases/download/9.9.9/Kazumi_macos_9.9.9.dmg"
 }
 
-def test-update-package-release-is-current-when-versions_match [] {
+def test-update-package-release-is-current-when-versions-match [] {
   let root = (tap-root "cask" "kazumi")
   let before = (open --raw ($root | path join "Casks" "kazumi.rb"))
   let r = (update-package $kazumi { version: "2.4.4" } --root $root --fetch-hash {|url| error make { msg: "must not download" } })
@@ -269,7 +269,7 @@ def test-update-all-publishes-the-packages-that-succeed-and-reports-the-one-that
   assert equal (sh-git $t.clone status --porcelain) ""
 }
 
-def test-update-all-reports-a-package_whose_upstream_lookup_fails [] {
+def test-update-all-reports-a-package-whose-upstream-lookup-fails [] {
   let t = (tap-with-remote)
   let latest = {|pkg| error make { msg: "api down" } }
   let results = (update-all [$kazumi] --root $t.clone --latest $latest)
@@ -292,7 +292,7 @@ def test-update-all-leaves-a-package-whose-commit-is-rejected-out-of-the-next-co
   assert str contains (open --raw ($t.clone | path join "Casks" "kazumi.rb")) 'version "2.4.4"'
 }
 
-def test-publish-undoes-its_commit-when-every-push-attempt-fails [] {
+def test-publish-undoes-its-commit-when-every-push-attempt-fails [] {
   let t = (tap-with-remote)
   let before = (sh-git $t.clone rev-parse HEAD)
   let hook = ($t.remote | path join "hooks" "pre-receive")
@@ -357,10 +357,10 @@ tracking = "nightly"
 
 # The manifest and the tap must list the same Packages: a file with no manifest entry
 # is never updated, and an entry with no file can never succeed.
-def test-the-manifest-lists_exactly_the_packages_in_the_tap [] {
+def test-the-manifest-lists-exactly-the-packages-in-the-tap [] {
   let repo = ($fixtures | path dirname | path dirname | path dirname)
   let manifest = (load-manifest ($repo | path join "scripts" "packages.toml"))
-  let declared = ($manifest | each {|p| $"(if $p.kind == "cask" { "Casks" } else { "Formula" })/($p.name).rb" } | sort)
+  let declared = ($manifest | each {|p| package-file $p } | sort)
   let on_disk = (glob ($repo | path join "{Casks,Formula}" "*.rb") | each {|f| $f | path relative-to $repo } | sort)
   assert equal $declared $on_disk
 }
@@ -445,6 +445,7 @@ def test-update-package-rejects-a-branch-commit-or-date-that-is-malformed [] {
     let before = (open --raw $file)
     let r = (update-package $sourcegit $bad --root $root)
     assert equal $r.status "failed" $"($bad | to nuon) should be rejected"
+    assert str contains $r.message "not in the expected form"
     assert equal (open --raw $file) $before
   }
 }
