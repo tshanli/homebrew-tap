@@ -282,6 +282,54 @@ export def update-all [
   }
 }
 
+# What a run reports: `log` for the console, `summary` (Markdown) for the Actions step
+# summary, `annotations` (GitHub workflow commands) so failures show on the run page.
+export def render-report [results: list<record>]: nothing -> record<log: string, summary: string, annotations: list<string>> {
+  let rows = ($results | each {|r|
+    match $r.status {
+      "updated" => { log: $"✅ ($r.name): ($r.from) → ($r.to)", result: "✅ updated", version: $"($r.from) → ($r.to)" }
+      "current" => { log: $"⏸️ ($r.name): up to date at ($r.from)", result: "⏸️ up to date", version: $r.from }
+      _ => {
+        let why = (one-line $r.message)
+        { log: $"❌ ($r.name): ($why)", result: $"❌ ($why | str replace --all '|' '\|')", version: (if ($r.from | is-empty) { "–" } else { $r.from }) }
+      }
+    }
+  })
+
+  let interesting = ($results | where status != "current")
+  let summary = if ($interesting | is-empty) {
+    "### ✅ All packages up to date\n"
+  } else {
+    let table = ($results | zip $rows | each {|p| $"| ($p.0.name) | ($p.1.result) | ($p.1.version) |\n" } | str join)
+    $"### Package updates\n\n| Package | Result | Version |\n|---|---|---|\n($table)"
+  }
+
+  {
+    log: ($rows | get log | str join "\n")
+    summary: $summary
+    annotations: ($results | where status == "failed" | each {|r|
+      $"::error title=(escape-command $r.name --property)::(escape-command (one-line $r.message))"
+    })
+  }
+}
+
+# The first line of a message, cut to 200 characters, so one failure never floods the log.
+def one-line [message: string]: nothing -> string {
+  let first = ($message | lines | append "" | first | str trim)
+  if ($first | str length --grapheme-clusters) > 200 {
+    ($first | str substring --grapheme-clusters 0..<200) + "…"
+  } else {
+    $first
+  }
+}
+
+# Escapes text for a GitHub Actions workflow command (`::error title=..::message`).
+def escape-command [text: string, --property]: nothing -> string {
+  # Callers pass single-line text, so only `%` (and, in a property, `:` and `,`) need escaping.
+  let base = ($text | str replace --all '%' '%25')
+  if $property { $base | str replace --all ':' '%3A' | str replace --all ',' '%2C' } else { $base }
+}
+
 # Updates the tap's Packages. Exits 1 if any Package failed, after trying all of them.
 def main [
   --only: string # update just this Package
@@ -293,18 +341,13 @@ def main [
   }
   let results = (update-all (load-manifest "scripts/packages.toml") --only $only --no-publish=$no_publish)
 
-  let lines = ($results | each {|r|
-    match $r.status {
-      "updated" => $"✅ ($r.name): ($r.from) → ($r.to)"
-      "current" => $"⏸️ ($r.name): up to date at ($r.from)"
-      _ => $"❌ ($r.name): ($r.message)"
-    }
-  })
-  print ($lines | str join "\n")
-  let summary = ($env | get --optional GITHUB_STEP_SUMMARY)
-  if $summary != null {
-    $"### Package updates\n\n($lines | each {|l| '- ' + $l } | str join "\n")\n" | save --append $summary
+  let report = (render-report $results)
+  print $report.log
+  if ($env | get --optional GITHUB_ACTIONS) == "true" {
+    for line in $report.annotations { print $line }
   }
+  let summary = ($env | get --optional GITHUB_STEP_SUMMARY)
+  if $summary != null { $report.summary | save --append $summary }
   if ($results | where status == "failed" | is-not-empty) { exit 1 }
 }
 

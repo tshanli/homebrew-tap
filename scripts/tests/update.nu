@@ -321,6 +321,53 @@ def test-publish-rollback-keeps-unrelated-uncommitted-edits [] {
   assert (not ((open --raw ($t.clone | path join "Casks" "kazumi.rb")) | str contains "# a"))
 }
 
+const current_kazumi = { name: "kazumi", status: "current", from: "2.4.4", to: "2.4.4", message: "" }
+const current_upgit = { name: "upgit", status: "current", from: "0.3.0", to: "0.3.0", message: "" }
+
+def test-render-report-says-so-in-one-line-when-everything-is-current [] {
+  let r = (render-report [$current_kazumi $current_upgit])
+  assert equal $r.summary "### ✅ All packages up to date\n"
+  assert equal $r.log "⏸️ kazumi: up to date at 2.4.4\n⏸️ upgit: up to date at 0.3.0"
+  assert equal $r.annotations []
+}
+
+def test-render-report-tabulates-updated-and-failed-packages [] {
+  let updated = { name: "kazumi", status: "updated", from: "2.4.3", to: "2.4.4", message: "" }
+  let failed = { name: "upgit", status: "failed", from: "0.3.0", to: "", message: "download failed: https://x.test/a.zip curl: (22) 404" }
+  let r = (render-report [$updated $failed])
+  assert equal $r.summary "### Package updates\n\n| Package | Result | Version |\n|---|---|---|\n| kazumi | ✅ updated | 2.4.3 → 2.4.4 |\n| upgit | ❌ download failed: https://x.test/a.zip curl: (22) 404 | 0.3.0 |\n"
+  assert equal $r.log "✅ kazumi: 2.4.3 → 2.4.4\n❌ upgit: download failed: https://x.test/a.zip curl: (22) 404"
+  assert equal $r.annotations ["::error title=upgit::download failed: https://x.test/a.zip curl: (22) 404"]
+}
+
+def test-render-report-shows-only-the-first-line-of-a-long-failure-message [] {
+  let long = ("x" | fill --character "x" --width 300)
+  let failed = { name: "upgit", status: "failed", from: "0.3.0", to: "", message: $"first line\nsecond line\n($long)" }
+  let r = (render-report [$failed])
+  assert equal $r.log "❌ upgit: first line"
+  let one_long = (render-report [($failed | merge { message: $long })])
+  # "❌ upgit: " is 9 characters, then the message cut to 200, then "…"
+  assert equal ($one_long.log | str length --grapheme-clusters) (9 + 200 + 1) "truncated to 200 characters plus an ellipsis"
+  assert ($one_long.log | str ends-with "…")
+}
+
+def test-render-report-escapes-what-would-break-a-table-or-an-annotation [] {
+  let failed = { name: "upgit", status: "failed", from: "", to: "", message: "50% done | not ok" }
+  let r = (render-report [$failed])
+  assert str contains $r.summary "| upgit | ❌ 50% done \\| not ok | – |"
+  assert equal $r.annotations ["::error title=upgit::50%25 done | not ok"]
+}
+
+def test-render-report-trims-whitespace-around-a-failure-message [] {
+  let failed = { name: "upgit", status: "failed", from: "1", to: "", message: "  boom  \n" }
+  assert equal (render-report [$failed]).log "❌ upgit: boom"
+}
+
+def test-render-report-escapes-the-annotation-title-property [] {
+  let failed = { name: "a:b,c", status: "failed", from: "1", to: "", message: "boom" }
+  assert equal (render-report [$failed]).annotations ["::error title=a%3Ab%2Cc::boom"]
+}
+
 def test-update-all-no-publish-edits-the-file-and-commits-nothing [] {
   let t = (tap-with-remote)
   let results = (update-all [$kazumi] --no-publish --root $t.clone --latest {|pkg| { version: "9.9.9" } } --fetch-hash {|url| a-hash "e" })
