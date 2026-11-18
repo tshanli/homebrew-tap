@@ -82,6 +82,11 @@ export def download-sha256 [url: string, --max-time: duration = 10min]: nothing 
   $sha
 }
 
+# The url -> sha256 closure to use: `fetch` when given (tests), else a real download.
+def hasher [fetch: any]: nothing -> closure {
+  if $fetch == null { {|url| download-sha256 $url } } else { $fetch }
+}
+
 # Where a Package's file lives in the tap, relative to its root.
 export def package-file [pkg: record]: nothing -> string {
   $"(if $pkg.kind == "cask" { "Casks" } else { "Formula" })/($pkg.name).rb"
@@ -111,9 +116,8 @@ export def update-package [
         if $from == $to {
           { status: "current", from: $from, to: $to }
         } else {
-          let hashes = (expand-urls $original $to | each {|url|
-            if $fetch_hash == null { download-sha256 $url } else { do $fetch_hash $url }
-          })
+          let hash = (hasher $fetch_hash)
+          let hashes = (expand-urls $original $to | each {|url| do $hash $url })
           {
             status: "updated", from: $from, to: $to
             text: (render-release $original $to $hashes)
@@ -263,11 +267,7 @@ export def update-all [
   $selected | each {|pkg|
     let result = (try {
       let state = (if $latest == null { fetch-latest $pkg } else { do $latest $pkg })
-      if $fetch_hash == null {
-        update-package $pkg $state --root $root
-      } else {
-        update-package $pkg $state --root $root --fetch-hash $fetch_hash
-      }
+      update-package $pkg $state --root $root --fetch-hash (hasher $fetch_hash)
     } catch {|e|
       { name: $pkg.name, status: "failed", message: $e.msg, from: "", to: "", file: "", commit_message: "" }
     })
