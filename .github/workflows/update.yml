@@ -25,19 +25,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30 # a stalled run must not hold the concurrency group for hours
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          persist-credentials: true
+      - uses: actions/checkout@v4
 
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: "3.1"
-
-      - name: Set up Nushell
-        uses: hustcer/setup-nu@v3
+      # The runner's own Ruby is enough: it only runs `ruby -c` on an updated file.
+      - uses: hustcer/setup-nu@v3
         with:
           version: "0.117.0"
 
