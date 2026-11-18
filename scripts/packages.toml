@@ -1,0 +1,20 @@
+# The Packages this tap publishes and how each follows its Upstream.
+# `scripts/update.nu` reads this file; see GLOSSARY.md for the terms.
+#
+# tracking = "release": follows the Upstream's latest tagged release. The download
+#   URLs and checksums come from the Package file's own `url "...#{version}..."` lines.
+# tracking = "branch": follows the head commit of `branch`.
+
+[[package]]
+name = "kazumi"
+display = "Kazumi"
+kind = "cask"
+upstream = "Predidit/Kazumi"
+tracking = "release"
+
+[[package]]
+name = "upgit"
+display = "Upgit"
+kind = "formula"
+upstream = "pluveto/upgit"
+tracking = "release"
