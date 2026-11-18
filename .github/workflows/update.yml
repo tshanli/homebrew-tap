@@ -1,0 +1,53 @@
+name: Update Packages
+
+on:
+  schedule:
+    # Every day at 1 AM UTC. A Package whose assets were not uploaded yet is retried the next day.
+    - cron: "0 1 * * *"
+  workflow_dispatch:
+    inputs:
+      package:
+        description: "Package to update (a name from scripts/packages.toml); blank updates all"
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: write # the bot pushes Package updates straight to main
+
+# Never run two updates at once: they would race to push to main.
+concurrency:
+  group: update-packages
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: true
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.1"
+
+      - name: Set up Nushell
+        uses: hustcer/setup-nu@v3
+        with:
+          version: "0.117.0"
+
+      - name: Update packages
+        shell: nu {0}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PACKAGE: ${{ inputs.package }}
+        run: |
+          if ($env.PACKAGE | is-empty) {
+            nu scripts/update.nu
+          } else {
+            nu scripts/update.nu --only $env.PACKAGE
+          }
