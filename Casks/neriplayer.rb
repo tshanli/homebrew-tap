@@ -31,9 +31,9 @@ cask "neriplayer" do
     <<~EOS
       NeriPlayer is ad-hoc signed and not notarized by Apple, so macOS may block it
       on first launch. Allow it in System Settings → Privacy & Security → Open Anyway,
-      or reinstall with the --no-quarantine flag:
+      or remove the quarantine attribute:
 
-        brew reinstall --cask --no-quarantine neriplayer
+        xattr -dr com.apple.quarantine /Applications/NeriPlayer.app
     EOS
   end
 
