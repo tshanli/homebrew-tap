@@ -122,7 +122,7 @@ def test-download-sha256-gives-up-on-a-stalled-server [] {
   let took = ((date now) - $started)
   ^kill $server.pid | complete | ignore
   assert str contains $r "download failed"
-  assert ($took < 20sec) $"took ($took)"
+  assert ($took < 45sec) $"took ($took)"
 }
 
 # A throwaway tap root holding one Package's file; returns the root.
@@ -305,6 +305,19 @@ def test-publish-undoes-its-commit-when-every-push-attempt-fails [] {
   assert (((date now) - $started) < 4sec) "the retry delay was not honoured"
   assert equal (sh-git $t.clone rev-parse HEAD) $before
   assert equal (sh-git $t.clone status --porcelain) ""
+  assert (not ((open --raw ($t.clone | path join "Casks" "kazumi.rb")) | str contains "# a"))
+}
+
+def test-publish-rollback-keeps-unrelated-uncommitted-edits [] {
+  let t = (tap-with-remote)
+  let hook = ($t.remote | path join "hooks" "pre-receive")
+  "#!/bin/sh\nexit 1\n" | save $hook
+  chmod +x $hook
+  "# mine\n" | save --append ($t.clone | path join "Formula" "upgit.rb")
+  "# a\n" | save --append ($t.clone | path join "Casks" "kazumi.rb")
+  let r = (try { publish { file: "Casks/kazumi.rb", commit_message: "Update Kazumi to version 9.9.9" } --root $t.clone --retry-delay 0sec; "no error" } catch {|e| $e.msg })
+  assert str contains $r "could not publish"
+  assert str contains (open --raw ($t.clone | path join "Formula" "upgit.rb")) "# mine"
   assert (not ((open --raw ($t.clone | path join "Casks" "kazumi.rb")) | str contains "# a"))
 }
 

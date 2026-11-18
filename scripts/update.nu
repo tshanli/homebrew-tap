@@ -71,7 +71,7 @@ export def download-sha256 [url: string, --max-time: duration = 10min]: nothing 
   let dir = (mktemp --directory)
   let file = ($dir | path join "download")
   let seconds = ($max_time / 1sec | math ceil | into string)
-  let r = (^curl --fail --location --silent --show-error --retry 3 --connect-timeout 20 --max-time $seconds --output $file $url | complete)
+  let r = (^curl --fail --location --silent --show-error --retry 3 --retry-max-time $seconds --connect-timeout 20 --max-time $seconds --output $file $url | complete)
   let size = (if ($file | path exists) { ls $file | get 0.size } else { 0b })
   if $r.exit_code != 0 or $size == 0b {
     rm --recursive --force $dir
@@ -178,7 +178,10 @@ export def publish [
     push-with-retries $root $remote $branch $retry_delay $result.file
   } catch {|e|
     ^git -C $root rebase --abort | complete | ignore
-    ^git -C $root reset --hard --quiet $start | complete | ignore
+    # Drop our commit and unstage, then restore only this Package's file: edits to
+    # other files (a developer running this locally) are not ours to discard.
+    ^git -C $root reset --quiet $start | complete | ignore
+    ^git -C $root checkout -- $result.file | complete | ignore
     error make { msg: $e.msg }
   }
 }
