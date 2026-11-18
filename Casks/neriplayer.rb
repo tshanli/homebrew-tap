@@ -19,10 +19,11 @@ cask "neriplayer" do
 
   livecheck do
     url :url
+    regex(/^(NeriPlayer-\h+\.\d+)$/i)
     strategy :github_latest
   end
 
-  depends_on macos: ">= :big_sur"
+  depends_on macos: :big_sur
 
   app "NeriPlayer.app"
 
