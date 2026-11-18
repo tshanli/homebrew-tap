@@ -11,6 +11,7 @@ Formulas:
 Casks:
 
 - **kazumi** - Anime streaming application
+- **neriplayer** - Multi-source streaming and local music player with word-synced lyrics
 
 ## 🤖 Automated Updates
 
@@ -47,4 +48,5 @@ brew install tshanli/tap/upgit
 
 # Install casks
 brew install --cask tshanli/tap/kazumi
+brew install --cask tshanli/tap/neriplayer
 ```

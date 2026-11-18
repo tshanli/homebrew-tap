@@ -18,3 +18,10 @@ display = "Upgit"
 kind = "formula"
 upstream = "pluveto/upgit"
 tracking = "release"
+
+[[package]]
+name = "neriplayer"
+display = "NeriPlayer"
+kind = "cask"
+upstream = "cwuom/NeriPlayer-Desktop"
+tracking = "release"
