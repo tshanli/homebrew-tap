@@ -19,11 +19,9 @@ cask "kazumi" do
       Kazumi may need to be allowed in System Settings → Privacy & Security.
 
       If you see "Kazumi is damaged and can't be opened" when launching the app,
-      try reinstalling with the --no-quarantine flag:
+      remove the quarantine attribute that macOS puts on unsigned applications:
 
-        brew reinstall --cask --no-quarantine kazumi
-
-      This bypasses macOS Gatekeeper quarantine for unsigned applications.
+        xattr -dr com.apple.quarantine /Applications/Kazumi.app
     EOS
   end
 
