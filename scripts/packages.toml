@@ -18,11 +18,3 @@ display = "Upgit"
 kind = "formula"
 upstream = "pluveto/upgit"
 tracking = "release"
-
-[[package]]
-name = "sourcegit-develop"
-display = "SourceGit develop"
-kind = "formula"
-upstream = "sourcegit-scm/sourcegit"
-tracking = "branch"
-branch = "develop"

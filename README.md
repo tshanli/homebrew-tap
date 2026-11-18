@@ -6,7 +6,6 @@ A personal Homebrew tap that publishes third-party software and keeps it current
 
 Formulas:
 
-- **sourcegit-develop** - SourceGit (GUI Git client), branch-tracked: follows the head of its `develop` branch
 - **upgit** - Upload tool for various cloud storage services
 
 Casks:
@@ -44,7 +43,6 @@ nu test-workflows.nu
 brew tap tshanli/tap
 
 # Install formulas
-brew install tshanli/tap/sourcegit-develop
 brew install tshanli/tap/upgit
 
 # Install casks
