@@ -25,3 +25,10 @@ display = "NeriPlayer"
 kind = "cask"
 upstream = "cwuom/NeriPlayer-Desktop"
 tracking = "release"
+
+[[package]]
+name = "tasks"
+display = "Tasks.org"
+kind = "cask"
+upstream = "tasks/tasks"
+tracking = "release"

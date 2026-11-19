@@ -12,6 +12,7 @@ Casks:
 
 - **kazumi** - Anime streaming application
 - **neriplayer** - Multi-source streaming and local music player with word-synced lyrics
+- **tasks** - Open-source to-do list and task manager (Tasks.org)
 
 ## 🤖 Automated Updates
 
@@ -49,4 +50,5 @@ brew install tshanli/tap/upgit
 # Install casks
 brew install --cask tshanli/tap/kazumi
 brew install --cask tshanli/tap/neriplayer
+brew install --cask tshanli/tap/tasks
 ```

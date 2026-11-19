@@ -282,3 +282,5 @@ lcov*.info
 # <<<<<<<<<<<<<<<< Generated from github End <<<<<<<<<<<<<<<<<
 .env.test
 .actrc
+
+.claude/worktrees/
