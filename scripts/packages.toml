@@ -32,3 +32,10 @@ display = "Tasks.org"
 kind = "cask"
 upstream = "tasks/tasks"
 tracking = "release"
+
+[[package]]
+name = "opentrack"
+display = "opentrack"
+kind = "cask"
+upstream = "bircni/aitrack"
+tracking = "release"
