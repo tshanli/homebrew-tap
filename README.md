@@ -25,7 +25,7 @@ One workflow, `.github/workflows/update.yml`, updates every package:
 
 The work is done by `scripts/update.nu` (Nushell). `scripts/packages.toml` lists each package, its upstream repository and whether it follows releases or a branch. For release-tracked packages the download URLs and checksums come from the package file's own `url` lines, so the script and the file cannot disagree.
 
-To add a package, add its `.rb` file under `Formula/` or `Casks/` and an entry in `scripts/packages.toml`; a test fails if the two lists differ.
+To add a package, add its `.rb` file under `Formula/` or `Casks/` and an entry in `scripts/packages.toml`; a test fails if the two lists differ. Open one pull request per package.
 
 ## 🧪 Local Testing
 

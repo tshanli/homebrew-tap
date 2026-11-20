@@ -15,3 +15,7 @@ Single-context: one root `GLOSSARY.md`, ADRs in `docs/adr/`. See `docs/agents/do
 ### External peers
 
 Mode `claude`: `code-review` and `jury` call the Claude CLI (default model, effort `high`). See `docs/agents/cross-model.json`.
+
+## Pull requests
+
+One package per PR. Adding or changing a package (its `Casks/` or `Formula/` file, its `scripts/packages.toml` entry and its README line) goes in its own branch and its own PR; never bundle two packages in one PR. Unrelated changes (docs, CI, scripts) go in separate PRs too.
