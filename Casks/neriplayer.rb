@@ -1,14 +1,14 @@
 cask "neriplayer" do
   # Upstream tags each release `NeriPlayer-<build>`, so the tag is the version.
-  version "NeriPlayer-af3c1b0.11151911"
+  version "NeriPlayer-18744b1.11211334"
 
   on_arm do
-    sha256 "9cf998fff518a7f43badd3635233a4d80a11e10a28819f530455e1387081a573"
+    sha256 "8ee42249f6a0acc33e06ac7df935cba4cabe89ff83abb8d27f424e0c31a46b17"
 
     url "https://github.com/cwuom/NeriPlayer-Desktop/releases/download/#{version}/NeriPlayer_1.0.0_aarch64-adhoc.dmg"
   end
   on_intel do
-    sha256 "0e41968f64e2c45960a52947fee8fe5e065c7abecdcc1508eca23b968ef37720"
+    sha256 "6f7025e32eb2a8778663b9ad41591571f413c18cf628280348c88301005e3e4d"
 
     url "https://github.com/cwuom/NeriPlayer-Desktop/releases/download/#{version}/NeriPlayer_1.0.0_x64-adhoc.dmg"
   end
